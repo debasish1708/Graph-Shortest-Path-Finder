@@ -6,6 +6,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
+import java.util.Stack;
 
 public class GraphGUI extends JFrame {
     private final ArrayList<Point> nodes; // Store node positions
@@ -25,6 +26,9 @@ public class GraphGUI extends JFrame {
     private static final Color HIGHLIGHTED_PATH_COLOR = new Color(46, 204, 113); // Green color
     private static final Color HIGHLIGHTED_NODE_COLOR = new Color(46, 204, 113); // Green color
 
+    private final Stack<Action> undoStack = new Stack<>();
+    private final Stack<Action> redoStack = new Stack<>();
+
     public GraphGUI() {
         nodes = new ArrayList<>();
         edges = new ArrayList<>();
@@ -36,6 +40,24 @@ public class GraphGUI extends JFrame {
         }
 
         setupUI();
+
+        // Add keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y)
+        InputMap inputMap = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = getRootPane().getActionMap();
+        inputMap.put(KeyStroke.getKeyStroke("control Z"), "undo");
+        inputMap.put(KeyStroke.getKeyStroke("control Y"), "redo");
+        actionMap.put("undo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                undo();
+            }
+        });
+        actionMap.put("redo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                redo();
+            }
+        });
     }
 
     private void setupUI() {
@@ -213,14 +235,18 @@ public class GraphGUI extends JFrame {
     }
 
     private void handleMouseClick(MouseEvent e) {
-                        // Left-click to create node
-                if (SwingUtilities.isLeftMouseButton(e)) {
-                    nodes.add(e.getPoint());
-                    nodeCount++;
-                    isPathHighlighted = false; // Clear previous path
-                    updateStats();
-                    repaint();
-                }
+        // Left-click to create node
+        if (SwingUtilities.isLeftMouseButton(e)) {
+            Point p = e.getPoint();
+            nodes.add(p);
+            nodeCount++;
+            isPathHighlighted = false; // Clear previous path
+            updateStats();
+            repaint();
+            // Track action
+            undoStack.push(new AddNodeAction(p));
+            redoStack.clear();
+        }
         // Right-click to connect nodes
         else if (SwingUtilities.isRightMouseButton(e)) {
             if (nodeCount > 1) {
@@ -280,12 +306,16 @@ public class GraphGUI extends JFrame {
                     }
                 }
                 
-                                if (!exists) {
-                    edges.add(new Edge(src, dest, wt));
-                    graph[src].add(new Edge(src, dest, wt));
+                if (!exists) {
+                    Edge edge = new Edge(src, dest, wt);
+                    edges.add(edge);
+                    graph[src].add(edge);
                     isPathHighlighted = false; // Clear previous path
                     updateStats();
                     repaint();
+                    // Track action
+                    undoStack.push(new AddEdgeAction(edge));
+                    redoStack.clear();
                 }
                 
             } catch (NumberFormatException ex) {
@@ -337,6 +367,7 @@ public class GraphGUI extends JFrame {
             "• Right-click to connect nodes",
             "• Enter source and destination IDs",
             "• Specify the weight/distance",
+            "• Ctrl+z Undo, Ctrl+y Redo",
             "• Click 'Find Shortest Path' to calculate"
         };
 
@@ -368,11 +399,21 @@ public class GraphGUI extends JFrame {
         JButton clearAllBtn = createStyledButton("Clear All", new Color(231, 76, 60));
         clearAllBtn.addActionListener(e -> clearAll());
 
+        // Undo/Redo buttons
+        JButton undoBtn = createStyledButton("Undo", new Color(241, 196, 15));
+        undoBtn.addActionListener(e -> undo());
+        JButton redoBtn = createStyledButton("Redo", new Color(52, 152, 219));
+        redoBtn.addActionListener(e -> redo());
+
         panel.add(findPathBtn);
         panel.add(Box.createVerticalStrut(10));
         panel.add(clearPathBtn);
         panel.add(Box.createVerticalStrut(10));
         panel.add(clearAllBtn);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(undoBtn);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(redoBtn);
 
         return panel;
     }
@@ -392,7 +433,7 @@ public class GraphGUI extends JFrame {
                     g2d.setColor(color);
                 }
                 
-                g2d.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 15, 15));
+                g2d.fill(new java.awt.geom.RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 15, 15));
                 g2d.dispose();
                 
                 super.paintComponent(g);
@@ -538,6 +579,9 @@ public class GraphGUI extends JFrame {
             "Confirm Clear", JOptionPane.YES_NO_OPTION);
         
         if (confirm == JOptionPane.YES_OPTION) {
+            // Track action
+            undoStack.push(new ClearAllAction(nodes, edges, graph, nodeCount));
+            redoStack.clear();
             nodes.clear();
             edges.clear();
             nodeCount = 0;
@@ -578,6 +622,96 @@ public class GraphGUI extends JFrame {
             this.src = src;
             this.dest = dest;
             this.wt = wt;
+        }
+    }
+
+    // Action base class and subclasses
+    private abstract class Action {
+        abstract void undo();
+        abstract void redo();
+    }
+    private class AddNodeAction extends Action {
+        private final Point point;
+        public AddNodeAction(Point point) { this.point = point; }
+        void undo() {
+            nodes.remove(nodes.size() - 1);
+            nodeCount--;
+            updateStats();
+            repaint();
+        }
+        void redo() {
+            nodes.add(point);
+            nodeCount++;
+            updateStats();
+            repaint();
+        }
+    }
+    private class AddEdgeAction extends Action {
+        private final Edge edge;
+        public AddEdgeAction(Edge edge) { this.edge = edge; }
+        void undo() {
+            edges.remove(edge);
+            graph[edge.src].removeIf(e -> e.dest == edge.dest && e.wt == edge.wt);
+            updateStats();
+            repaint();
+        }
+        void redo() {
+            edges.add(edge);
+            graph[edge.src].add(edge);
+            updateStats();
+            repaint();
+        }
+    }
+    private class ClearAllAction extends Action {
+        private final ArrayList<Point> oldNodes;
+        private final ArrayList<Edge> oldEdges;
+        private final ArrayList<Edge>[] oldGraph;
+        private final int oldNodeCount;
+        public ClearAllAction(ArrayList<Point> nodes, ArrayList<Edge> edges, ArrayList<Edge>[] graph, int nodeCount) {
+            this.oldNodes = new ArrayList<>(nodes);
+            this.oldEdges = new ArrayList<>(edges);
+            this.oldGraph = new ArrayList[100];
+            for (int i = 0; i < 100; i++) {
+                this.oldGraph[i] = new ArrayList<>(graph[i]);
+            }
+            this.oldNodeCount = nodeCount;
+        }
+        void undo() {
+            nodes.clear();
+            nodes.addAll(oldNodes);
+            edges.clear();
+            edges.addAll(oldEdges);
+            for (int i = 0; i < 100; i++) {
+                graph[i].clear();
+                graph[i].addAll(oldGraph[i]);
+            }
+            nodeCount = oldNodeCount;
+            updateStats();
+            repaint();
+        }
+        void redo() {
+            nodes.clear();
+            edges.clear();
+            nodeCount = 0;
+            for (int i = 0; i < 100; i++) graph[i].clear();
+            updateStats();
+            repaint();
+        }
+    }
+
+    // Undo/Redo methods
+    private void undo() {
+        if (!undoStack.isEmpty()) {
+            Action action = undoStack.pop();
+            action.undo();
+            redoStack.push(action);
+        }
+    }
+    private void redo() {
+        if (!redoStack.isEmpty()) {
+            Action action = redoStack.pop();
+            action.redo();
+            undoStack.push(action);
         }
     }
 }
