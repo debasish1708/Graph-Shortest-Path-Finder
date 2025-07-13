@@ -239,8 +239,10 @@ public class GraphGUI extends JFrame {
         JTextField destField = new JTextField();
         JTextField weightField = new JTextField();
         
-        // Set auto-focus to first field
-        SwingUtilities.invokeLater(() -> sourceField.requestFocusInWindow());
+        // Ensure the first field gets focus when dialog appears
+        Timer timer = new Timer(100, e -> sourceField.requestFocusInWindow());
+        timer.setRepeats(false);
+        timer.start();
         
         panel.add(new JLabel("Source Node ID:"));
         panel.add(sourceField);
@@ -465,8 +467,10 @@ public class GraphGUI extends JFrame {
         JTextField sourceField = new JTextField();
         JTextField destField = new JTextField();
         
-        // Set auto-focus to first field
-        SwingUtilities.invokeLater(() -> sourceField.requestFocusInWindow());
+        // Ensure the first field gets focus when dialog appears
+        Timer timer = new Timer(100, e -> sourceField.requestFocusInWindow());
+        timer.setRepeats(false);
+        timer.start();
         
         panel.add(new JLabel("Source Node ID:"));
         panel.add(sourceField);
