@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="DijkstraAlgorithmProject:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/DijkstraAlgorithmProject_jar</output-path>
+    <root id="archive" name="DijkstraAlgorithmProject.jar">
+      <element id="module-output" name="DijkstraAlgorithmProject" />
+    </root>
+  </artifact>
+</component>
