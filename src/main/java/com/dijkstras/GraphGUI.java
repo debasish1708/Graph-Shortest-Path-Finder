@@ -68,8 +68,21 @@ public class GraphGUI extends JFrame {
                             int dest = Integer.parseInt(destNode);
                             int wt = Integer.parseInt(weight);
 
-                            edges.add(new Edge(src, dest, wt));
-                            graph[src].add(new Edge(src, dest, wt)); // Add edge to graph
+                            boolean exist=false;
+                            for(int i=0;i<graph[src].size();i++) {
+                                Edge v=graph[src].get(i);
+                                if(v.dest==dest) {
+                                    System.out.println(v.dest+" is already connected");
+                                    JOptionPane.showMessageDialog(null,
+                                            "nodes are already connected");
+                                    exist=true;
+                                }
+                            }
+
+                            if(!exist){// Add edge to graph
+                                edges.add(new Edge(src, dest, wt));
+                                graph[src].add(new Edge(src, dest, wt));
+                            }
 
                             repaint(); // Redraw graph with the new edge
                         } catch (Exception ex) {
