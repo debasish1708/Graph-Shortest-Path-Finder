@@ -22,8 +22,8 @@ public class GraphGUI extends JFrame {
     private static final Color BACKGROUND_COLOR = new Color(236, 240, 241);
     private static final Color NODE_COLOR = new Color(52, 152, 219);
     private static final Color EDGE_COLOR = new Color(149, 165, 166);
-    private static final Color HIGHLIGHTED_PATH_COLOR = new Color(231, 76, 60);
-    private static final Color HIGHLIGHTED_NODE_COLOR = new Color(230, 126, 34);
+    private static final Color HIGHLIGHTED_PATH_COLOR = new Color(46, 204, 113); // Green color
+    private static final Color HIGHLIGHTED_NODE_COLOR = new Color(46, 204, 113); // Green color
 
     public GraphGUI() {
         nodes = new ArrayList<>();
@@ -213,13 +213,14 @@ public class GraphGUI extends JFrame {
     }
 
     private void handleMouseClick(MouseEvent e) {
-        // Left-click to create node
-        if (SwingUtilities.isLeftMouseButton(e)) {
-            nodes.add(e.getPoint());
-            nodeCount++;
-            isPathHighlighted = false; // Clear previous path
-            repaint();
-        }
+                        // Left-click to create node
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    nodes.add(e.getPoint());
+                    nodeCount++;
+                    isPathHighlighted = false; // Clear previous path
+                    updateStats();
+                    repaint();
+                }
         // Right-click to connect nodes
         else if (SwingUtilities.isRightMouseButton(e)) {
             if (nodeCount > 1) {
@@ -237,6 +238,9 @@ public class GraphGUI extends JFrame {
         JTextField sourceField = new JTextField();
         JTextField destField = new JTextField();
         JTextField weightField = new JTextField();
+        
+        // Set auto-focus to first field
+        SwingUtilities.invokeLater(() -> sourceField.requestFocusInWindow());
         
         panel.add(new JLabel("Source Node ID:"));
         panel.add(sourceField);
@@ -274,10 +278,11 @@ public class GraphGUI extends JFrame {
                     }
                 }
                 
-                if (!exists) {
+                                if (!exists) {
                     edges.add(new Edge(src, dest, wt));
                     graph[src].add(new Edge(src, dest, wt));
                     isPathHighlighted = false; // Clear previous path
+                    updateStats();
                     repaint();
                 }
                 
@@ -404,11 +409,15 @@ public class GraphGUI extends JFrame {
         return button;
     }
 
+    private JPanel statsPanel;
+    private JLabel nodesLabel;
+    private JLabel edgesLabel;
+
     private JPanel createStatsPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createCompoundBorder(
+        statsPanel = new JPanel();
+        statsPanel.setLayout(new BoxLayout(statsPanel, BoxLayout.Y_AXIS));
+        statsPanel.setBackground(Color.WHITE);
+        statsPanel.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(PRIMARY_COLOR, 1),
             BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
@@ -418,21 +427,30 @@ public class GraphGUI extends JFrame {
         titleLabel.setForeground(PRIMARY_COLOR);
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel nodesLabel = new JLabel("Nodes: " + nodeCount);
+        nodesLabel = new JLabel("Nodes: " + nodeCount);
         nodesLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         nodesLabel.setForeground(new Color(127, 140, 141));
 
-        JLabel edgesLabel = new JLabel("Edges: " + edges.size());
+        edgesLabel = new JLabel("Edges: " + edges.size());
         edgesLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         edgesLabel.setForeground(new Color(127, 140, 141));
 
-        panel.add(titleLabel);
-        panel.add(Box.createVerticalStrut(10));
-        panel.add(nodesLabel);
-        panel.add(Box.createVerticalStrut(5));
-        panel.add(edgesLabel);
+        statsPanel.add(titleLabel);
+        statsPanel.add(Box.createVerticalStrut(10));
+        statsPanel.add(nodesLabel);
+        statsPanel.add(Box.createVerticalStrut(5));
+        statsPanel.add(edgesLabel);
 
-        return panel;
+        return statsPanel;
+    }
+
+    private void updateStats() {
+        if (nodesLabel != null && edgesLabel != null) {
+            nodesLabel.setText("Nodes: " + nodeCount);
+            edgesLabel.setText("Edges: " + edges.size());
+            statsPanel.revalidate();
+            statsPanel.repaint();
+        }
     }
 
     private void findShortestPath() {
@@ -446,6 +464,9 @@ public class GraphGUI extends JFrame {
         
         JTextField sourceField = new JTextField();
         JTextField destField = new JTextField();
+        
+        // Set auto-focus to first field
+        SwingUtilities.invokeLater(() -> sourceField.requestFocusInWindow());
         
         panel.add(new JLabel("Source Node ID:"));
         panel.add(sourceField);
@@ -524,6 +545,7 @@ public class GraphGUI extends JFrame {
                 graph[i].clear();
             }
             
+            updateStats();
             repaint();
         }
     }
