@@ -2,6 +2,7 @@ package com.dijkstras;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.RoundRectangle2D;
@@ -177,6 +178,9 @@ public class GraphGUI extends JFrame {
                 // Draw edge line
                 g2d.drawLine(src.x, src.y, dest.x, dest.y);
 
+                // Draw arrowhead to indicate direction (from src to dest)
+                drawEdgeArrowhead(g2d, src, dest, isHighlighted);
+
                 // Draw animated path if currently animating
                 if (isAnimating && isHighlighted) {
                     drawAnimatedPath(g2d, src, dest);
@@ -201,6 +205,39 @@ public class GraphGUI extends JFrame {
                 g2d.drawString(weightText, labelX, labelY);
             }
         }
+    }
+
+    // Draw an arrowhead at the end of an edge to indicate direction
+    private void drawEdgeArrowhead(Graphics2D g2d, Point src, Point dest, boolean isHighlighted) {
+        // Arrowhead parameters
+        int nodeRadius = 15; // Should match node drawing
+        int arrowSize = 12;
+        double angle = Math.atan2(dest.y - src.y, dest.x - src.x);
+
+        // Position the arrowhead just before the destination node
+        int arrowX = (int) (dest.x - nodeRadius * Math.cos(angle));
+        int arrowY = (int) (dest.y - nodeRadius * Math.sin(angle));
+
+        double arrowAngle = Math.PI / 7;
+        int x1 = (int) (arrowX - arrowSize * Math.cos(angle - arrowAngle));
+        int y1 = (int) (arrowY - arrowSize * Math.sin(angle - arrowAngle));
+        int x2 = (int) (arrowX - arrowSize * Math.cos(angle + arrowAngle));
+        int y2 = (int) (arrowY - arrowSize * Math.sin(angle + arrowAngle));
+
+        // Set color
+        if (isHighlighted) {
+            g2d.setColor(HIGHLIGHTED_PATH_COLOR);
+        } else {
+            g2d.setColor(EDGE_COLOR);
+        }
+        // Draw filled arrowhead
+        int[] xPoints = {arrowX, x1, x2};
+        int[] yPoints = {arrowY, y1, y2};
+        g2d.fillPolygon(xPoints, yPoints, 3);
+        // Draw white outline
+        g2d.setColor(Color.WHITE);
+        g2d.setStroke(new BasicStroke(1.2f));
+        g2d.drawPolygon(xPoints, yPoints, 3);
     }
 
     private void drawNodes(Graphics2D g2d) {
@@ -400,8 +437,11 @@ public class GraphGUI extends JFrame {
     }
 
     private void showEdgeCreationDialog() {
-        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
+        JPanel panel = new JPanel(new BorderLayout(15, 15));
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        
+        // Create main form panel
+        JPanel formPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         
         JTextField sourceField = new JTextField();
         JTextField destField = new JTextField();
@@ -412,12 +452,19 @@ public class GraphGUI extends JFrame {
         timer.setRepeats(false);
         timer.start();
         
-        panel.add(new JLabel("Source Node ID:"));
-        panel.add(sourceField);
-        panel.add(new JLabel("Destination Node ID:"));
-        panel.add(destField);
-        panel.add(new JLabel("Weight:"));
-        panel.add(weightField);
+        formPanel.add(new JLabel("Source Node ID:"));
+        formPanel.add(sourceField);
+        formPanel.add(new JLabel("Destination Node ID:"));
+        formPanel.add(destField);
+        formPanel.add(new JLabel("Weight:"));
+        formPanel.add(weightField);
+        
+        // Create arrow visualization panel
+        JPanel arrowPanel = createArrowVisualizationPanel(sourceField, destField);
+        
+        // Add components to main panel
+        panel.add(formPanel, BorderLayout.NORTH);
+        panel.add(arrowPanel, BorderLayout.CENTER);
         
         int result = JOptionPane.showConfirmDialog(this, panel, "Create Edge", 
                                                  JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
@@ -462,6 +509,183 @@ public class GraphGUI extends JFrame {
                 
             } catch (NumberFormatException ex) {
                 showMessage("Please enter valid numbers!", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private JPanel createArrowVisualizationPanel(JTextField sourceField, JTextField destField) {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(PRIMARY_COLOR, 2),
+                "Direction Visualization",
+                TitledBorder.CENTER,
+                TitledBorder.TOP,
+                new Font("Segoe UI", Font.BOLD, 14),
+                PRIMARY_COLOR
+            ),
+            BorderFactory.createEmptyBorder(15, 15, 15, 15)
+        ));
+        panel.setBackground(new Color(248, 249, 250));
+
+        // Create the arrow visualization component
+        JPanel arrowVizPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                // Get the current values
+                String sourceText = sourceField.getText();
+                String destText = destField.getText();
+                
+                int width = getWidth();
+                int height = getHeight();
+                
+                // Draw background gradient
+                GradientPaint gradient = new GradientPaint(0, 0, new Color(255, 255, 255), 
+                                                          width, height, new Color(248, 249, 250));
+                g2d.setPaint(gradient);
+                g2d.fillRect(0, 0, width, height);
+                
+                if (!sourceText.isEmpty() && !destText.isEmpty()) {
+                    try {
+                        int sourceId = Integer.parseInt(sourceText);
+                        int destId = Integer.parseInt(destText);
+                        
+                        // Check if nodes exist
+                        if (sourceId >= 0 && sourceId < nodeCount && destId >= 0 && destId < nodeCount) {
+                            // Draw source node
+                            int sourceX = width / 4;
+                            int nodeY = height / 2;
+                            int nodeRadius = 25;
+                            
+                            // Source node with blue color
+                            g2d.setColor(PRIMARY_COLOR);
+                            g2d.fillOval(sourceX - nodeRadius, nodeY - nodeRadius, nodeRadius * 2, nodeRadius * 2);
+                            g2d.setColor(Color.WHITE);
+                            g2d.setStroke(new BasicStroke(2.0f));
+                            g2d.drawOval(sourceX - nodeRadius, nodeY - nodeRadius, nodeRadius * 2, nodeRadius * 2);
+                            
+                            // Source node label
+                            g2d.setColor(Color.WHITE);
+                            g2d.setFont(new Font("Segoe UI", Font.BOLD, 14));
+                            String sourceLabel = "S: " + sourceId;
+                            FontMetrics fm = g2d.getFontMetrics();
+                            int sourceTextWidth = fm.stringWidth(sourceLabel);
+                            g2d.drawString(sourceLabel, sourceX - sourceTextWidth / 2, nodeY + 5);
+                            
+                            // Draw destination node
+                            int destX = 3 * width / 4;
+                            
+                            // Destination node with green color
+                            g2d.setColor(ACCENT_COLOR);
+                            g2d.fillOval(destX - nodeRadius, nodeY - nodeRadius, nodeRadius * 2, nodeRadius * 2);
+                            g2d.setColor(Color.WHITE);
+                            g2d.drawOval(destX - nodeRadius, nodeY - nodeRadius, nodeRadius * 2, nodeRadius * 2);
+                            
+                            // Destination node label
+                            g2d.setColor(Color.WHITE);
+                            String destLabel = "D: " + destId;
+                            int destTextWidth = fm.stringWidth(destLabel);
+                            g2d.drawString(destLabel, destX - destTextWidth / 2, nodeY + 5);
+                            
+                            // Draw animated arrow
+                            drawAnimatedArrowBetweenNodes(g2d, sourceX, destX, nodeY);
+                            
+                        } else {
+                            // Show error message
+                            g2d.setColor(new Color(231, 76, 60));
+                            g2d.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                            String errorMsg = "Invalid node IDs! Use 0 to " + (nodeCount - 1);
+                            FontMetrics fm = g2d.getFontMetrics();
+                            int textWidth = fm.stringWidth(errorMsg);
+                            g2d.drawString(errorMsg, (width - textWidth) / 2, height / 2);
+                        }
+                    } catch (NumberFormatException e) {
+                        // Show instruction message
+                        g2d.setColor(new Color(127, 140, 141));
+                        g2d.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+                        String instruction = "Enter valid node IDs to see direction";
+                        FontMetrics fm = g2d.getFontMetrics();
+                        int textWidth = fm.stringWidth(instruction);
+                        g2d.drawString(instruction, (width - textWidth) / 2, height / 2);
+                    }
+                } else {
+                    // Show instruction message
+                    g2d.setColor(new Color(127, 140, 141));
+                    g2d.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+                    String instruction = "Enter source and destination IDs to see direction";
+                    FontMetrics fm = g2d.getFontMetrics();
+                    int textWidth = fm.stringWidth(instruction);
+                    g2d.drawString(instruction, (width - textWidth) / 2, height / 2);
+                }
+                
+                g2d.dispose();
+            }
+        };
+        
+        arrowVizPanel.setPreferredSize(new Dimension(300, 120));
+        arrowVizPanel.setBackground(Color.WHITE);
+        
+        // Add document listeners to update the visualization
+        sourceField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { arrowVizPanel.repaint(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { arrowVizPanel.repaint(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { arrowVizPanel.repaint(); }
+        });
+        
+        destField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { arrowVizPanel.repaint(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { arrowVizPanel.repaint(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { arrowVizPanel.repaint(); }
+        });
+        
+        panel.add(arrowVizPanel, BorderLayout.CENTER);
+        
+        // Add timer to continuously update the animation
+        Timer animationTimer = new Timer(50, e -> arrowVizPanel.repaint());
+        animationTimer.start();
+        
+        return panel;
+    }
+
+    private void drawAnimatedArrowBetweenNodes(Graphics2D g2d, int sourceX, int destX, int nodeY) {
+        // Calculate arrow parameters
+        int arrowLength = destX - sourceX - 50; // Leave space for nodes
+        int arrowStartX = sourceX + 25;
+        int arrowEndX = destX - 25;
+        
+        // Draw arrow line
+        g2d.setColor(PRIMARY_COLOR);
+        g2d.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2d.drawLine(arrowStartX, nodeY, arrowEndX, nodeY);
+        
+        // Draw arrow head
+        int arrowHeadSize = 12;
+        int[] xPoints = {arrowEndX, arrowEndX - arrowHeadSize, arrowEndX - arrowHeadSize};
+        int[] yPoints = {nodeY, nodeY - arrowHeadSize/2, nodeY + arrowHeadSize/2};
+        
+        g2d.setColor(ACCENT_COLOR);
+        g2d.fillPolygon(xPoints, yPoints, 3);
+        
+        // Draw arrow outline
+        g2d.setColor(Color.WHITE);
+        g2d.setStroke(new BasicStroke(1.5f));
+        g2d.drawPolygon(xPoints, yPoints, 3);
+        
+        // Draw animated dots along the arrow
+        long currentTime = System.currentTimeMillis();
+        double animationProgress = (currentTime % 2000) / 2000.0; // 2 second cycle
+        
+        for (int i = 0; i < 3; i++) {
+            double dotProgress = (animationProgress + i * 0.3) % 1.0;
+            int dotX = (int) (arrowStartX + dotProgress * (arrowEndX - arrowStartX));
+            int dotSize = 6 - i * 2;
+            if (dotSize > 0) {
+                g2d.setColor(new Color(ACCENT_COLOR.getRed(), ACCENT_COLOR.getGreen(), ACCENT_COLOR.getBlue(), 200 - i * 60));
+                g2d.fillOval(dotX - dotSize/2, nodeY - dotSize/2, dotSize, dotSize);
             }
         }
     }
