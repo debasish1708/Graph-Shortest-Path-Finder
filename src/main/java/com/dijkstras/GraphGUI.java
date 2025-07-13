@@ -147,9 +147,16 @@ public class GraphGUI extends JFrame {
 
     private void drawEdges(Graphics2D g2d) {
         for (Edge e : graph.edges) {
-            if (graph.nodes.size() > e.src && graph.nodes.size() > e.dest) {
-                Point src = graph.nodes.get(e.src).position;
-                Point dest = graph.nodes.get(e.dest).position;
+            // Find nodes by ID instead of by index
+            Node srcNode = null, destNode = null;
+            for (Node node : graph.nodes) {
+                if (node.id == e.src) srcNode = node;
+                if (node.id == e.dest) destNode = node;
+            }
+            
+            if (srcNode != null && destNode != null) {
+                Point src = srcNode.position;
+                Point dest = destNode.position;
 
                 // Check if this edge is part of the highlighted path
                 boolean isHighlighted = isPathHighlighted && isEdgeInPath(e.src, e.dest);
@@ -229,10 +236,11 @@ public class GraphGUI extends JFrame {
 
     private void drawNodes(Graphics2D g2d) {
         for (int i = 0; i < graph.nodes.size(); i++) {
-            Point p = graph.nodes.get(i).position;
+            Node node = graph.nodes.get(i);
+            Point p = node.position;
             
             // Check if this node is part of the highlighted path
-            boolean isHighlighted = isPathHighlighted && highlightedPath.contains(i);
+            boolean isHighlighted = isPathHighlighted && highlightedPath.contains(node.id);
             
             // Draw node shadow
             g2d.setColor(new Color(0, 0, 0, 30));
@@ -259,7 +267,7 @@ public class GraphGUI extends JFrame {
             // Draw node number
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            String nodeText = Integer.toString(i);
+            String nodeText = Integer.toString(node.id);
             FontMetrics fm = g2d.getFontMetrics();
             int textWidth = fm.stringWidth(nodeText);
             g2d.drawString(nodeText, p.x - textWidth / 2, p.y + 4);
@@ -405,13 +413,22 @@ public class GraphGUI extends JFrame {
         if (SwingUtilities.isLeftMouseButton(e)) {
             Point p = e.getPoint();
             int id = graph.addNode(p);
-            Node node = graph.nodes.get(id);
-            isPathHighlighted = false; // Clear previous path
-            updateStats();
-            repaint();
-            // Track action
-            undoStack.push(new AddNodeAction(graph, node));
-            redoStack.clear();
+            // Find the node by ID (since IDs might not match array indices after undo/redo)
+            Node node = null;
+            for (Node n : graph.nodes) {
+                if (n.id == id) {
+                    node = n;
+                    break;
+                }
+            }
+            if (node != null) {
+                isPathHighlighted = false; // Clear previous path
+                updateStats();
+                repaint();
+                // Track action
+                undoStack.push(new AddNodeAction(graph, node));
+                redoStack.clear();
+            }
         }
         // Right-click to connect nodes
         else if (SwingUtilities.isRightMouseButton(e)) {
@@ -978,6 +995,7 @@ public class GraphGUI extends JFrame {
             
             // Track action
             undoStack.push(new ClearAllAction(graph));
+            redoStack.clear();
             graph.clear();
             
             updateStats();
@@ -1006,45 +1024,88 @@ public class GraphGUI extends JFrame {
         abstract void undo();
         abstract void redo();
     }
+    
     private class AddNodeAction extends Action {
         private final Graph graph;
         private final Node node;
-        public AddNodeAction(Graph graph, Node node) { this.graph = graph; this.node = node; }
+        
+        public AddNodeAction(Graph graph, Node node) { 
+            this.graph = graph; 
+            this.node = node; 
+        }
+        
         void undo() {
+            // Remove the node and all its associated edges
             graph.removeNode(node.id);
             updateStats();
             repaint();
         }
+        
         void redo() {
+            // Add the node back with the correct ID
+            node.id = graph.nodeCount; // Assign the next available ID
             graph.nodes.add(node);
             graph.nodeCount++;
             updateStats();
             repaint();
         }
     }
+    
     private class AddEdgeAction extends Action {
         private final Graph graph;
         private final Edge edge;
-        public AddEdgeAction(Graph graph, Edge edge) { this.graph = graph; this.edge = edge; }
+        
+        public AddEdgeAction(Graph graph, Edge edge) { 
+            this.graph = graph; 
+            this.edge = edge; 
+        }
+        
         void undo() {
             graph.removeEdge(edge.src, edge.dest);
             updateStats();
             repaint();
         }
+        
         void redo() {
             graph.addEdge(edge.src, edge.dest, edge.wt);
             updateStats();
             repaint();
         }
     }
+    
     private class ClearAllAction extends Action {
         private final Graph graph;
-        public ClearAllAction(Graph graph) { this.graph = graph; }
+        private final ArrayList<Node> oldNodes;
+        private final ArrayList<Edge> oldEdges;
+        private final ArrayList<Edge>[] oldAdjList;
+        private final int oldNodeCount;
+        
+        @SuppressWarnings("unchecked")
+        public ClearAllAction(Graph graph) {
+            this.graph = graph;
+            this.oldNodes = new ArrayList<>(graph.nodes);
+            this.oldEdges = new ArrayList<>(graph.edges);
+            this.oldAdjList = new ArrayList[graph.adjList.length];
+            for (int i = 0; i < graph.adjList.length; i++) {
+                this.oldAdjList[i] = new ArrayList<>(graph.adjList[i]);
+            }
+            this.oldNodeCount = graph.nodeCount;
+        }
+        
         void undo() {
-            graph.clear();
+            graph.nodes.clear();
+            graph.nodes.addAll(oldNodes);
+            graph.edges.clear();
+            graph.edges.addAll(oldEdges);
+            for (int i = 0; i < graph.adjList.length; i++) {
+                graph.adjList[i].clear();
+                graph.adjList[i].addAll(oldAdjList[i]);
+            }
+            graph.nodeCount = oldNodeCount;
             updateStats();
             repaint();
         }
+        
         void redo() {
             graph.clear();
             updateStats();
@@ -1060,6 +1121,7 @@ public class GraphGUI extends JFrame {
             redoStack.push(action);
         }
     }
+    
     private void redo() {
         if (!redoStack.isEmpty()) {
             Action action = redoStack.pop();

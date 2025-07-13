@@ -25,12 +25,18 @@ public class Graph {
     }
 
     public void removeNode(int id) {
+        // Remove the node
         nodes.removeIf(n -> n.id == id);
+        
+        // Remove all edges connected to this node
         edges.removeIf(e -> e.src == id || e.dest == id);
         adjList[id].clear();
         for (ArrayList<Edge> list : adjList) {
             list.removeIf(e -> e.src == id || e.dest == id);
         }
+        
+        // Decrement node count
+        nodeCount--;
     }
 
     public void addEdge(int src, int dest, int wt) {

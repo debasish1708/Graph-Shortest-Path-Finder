@@ -9,14 +9,19 @@ public abstract class Action {
     public static class AddNodeAction extends Action {
         private final Graph graph;
         private final Node node;
+        
         public AddNodeAction(Graph graph, Node node) {
             this.graph = graph;
             this.node = node;
         }
+        
         public void undo() {
             graph.removeNode(node.id);
         }
+        
         public void redo() {
+            // Add the node back with the correct ID
+            node.id = graph.nodeCount; // Assign the next available ID
             graph.nodes.add(node);
             graph.nodeCount++;
         }
@@ -25,13 +30,16 @@ public abstract class Action {
     public static class AddEdgeAction extends Action {
         private final Graph graph;
         private final Edge edge;
+        
         public AddEdgeAction(Graph graph, Edge edge) {
             this.graph = graph;
             this.edge = edge;
         }
+        
         public void undo() {
             graph.removeEdge(edge.src, edge.dest);
         }
+        
         public void redo() {
             graph.addEdge(edge.src, edge.dest, edge.wt);
         }
@@ -43,6 +51,7 @@ public abstract class Action {
         private final ArrayList<Edge> oldEdges;
         private final ArrayList<Edge>[] oldAdjList;
         private final int oldNodeCount;
+        
         @SuppressWarnings("unchecked")
         public ClearAllAction(Graph graph) {
             this.graph = graph;
@@ -54,6 +63,7 @@ public abstract class Action {
             }
             this.oldNodeCount = graph.nodeCount;
         }
+        
         public void undo() {
             graph.nodes.clear();
             graph.nodes.addAll(oldNodes);
@@ -65,11 +75,9 @@ public abstract class Action {
             }
             graph.nodeCount = oldNodeCount;
         }
+        
         public void redo() {
-            graph.nodes.clear();
-            graph.edges.clear();
-            graph.nodeCount = 0;
-            for (int i = 0; i < graph.adjList.length; i++) graph.adjList[i].clear();
+            graph.clear();
         }
     }
 } 
