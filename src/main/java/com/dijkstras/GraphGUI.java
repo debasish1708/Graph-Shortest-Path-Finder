@@ -16,6 +16,13 @@ public class GraphGUI extends JFrame {
     private ArrayList<Integer> highlightedPath = new ArrayList<>(); // Store highlighted path
     private boolean isPathHighlighted = false;
 
+    // Animation-related fields
+    private Timer animationTimer;
+    private int animationStep = 0;
+    private boolean isAnimating = false;
+    private static final int ANIMATION_DELAY = 100; // milliseconds per step (faster for smoother animation)
+    private static final int ANIMATION_STEPS = 60; // total animation steps (more steps for smoother animation)
+
     // Modern color scheme
     private static final Color PRIMARY_COLOR = new Color(52, 152, 219);
     private static final Color SECONDARY_COLOR = new Color(41, 128, 185);
@@ -25,6 +32,7 @@ public class GraphGUI extends JFrame {
     private static final Color EDGE_COLOR = new Color(149, 165, 166);
     private static final Color HIGHLIGHTED_PATH_COLOR = new Color(46, 204, 113); // Green color
     private static final Color HIGHLIGHTED_NODE_COLOR = new Color(46, 204, 113); // Green color
+    private static final Color ANIMATION_COLOR = new Color(46, 204, 113); // Bright green for animation
 
     private final Stack<Action> undoStack = new Stack<>();
     private final Stack<Action> redoStack = new Stack<>();
@@ -169,6 +177,11 @@ public class GraphGUI extends JFrame {
                 // Draw edge line
                 g2d.drawLine(src.x, src.y, dest.x, dest.y);
 
+                // Draw animated path if currently animating
+                if (isAnimating && isHighlighted) {
+                    drawAnimatedPath(g2d, src, dest);
+                }
+
                 // Draw weight label
                 g2d.setColor(Color.WHITE);
                 g2d.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -209,6 +222,11 @@ public class GraphGUI extends JFrame {
             }
             g2d.fillOval(p.x - 15, p.y - 15, 30, 30);
             
+            // Draw animated node effect if currently animating
+            if (isAnimating && isHighlighted) {
+                drawAnimatedNode(g2d, p, i);
+            }
+            
             // Draw node border
             g2d.setColor(Color.WHITE);
             g2d.setStroke(new BasicStroke(2.0f));
@@ -232,6 +250,130 @@ public class GraphGUI extends JFrame {
             }
         }
         return false;
+    }
+
+    private void drawAnimatedPath(Graphics2D g2d, Point src, Point dest) {
+        // Find which edge this is in the path sequence
+        int edgeIndex = -1;
+        for (int i = 0; i < highlightedPath.size() - 1; i++) {
+            int pathSrc = highlightedPath.get(i);
+            int pathDest = highlightedPath.get(i + 1);
+            
+            // Find the node indices for the current edge
+            int srcIndex = -1, destIndex = -1;
+            for (int j = 0; j < nodes.size(); j++) {
+                if (nodes.get(j).equals(src)) srcIndex = j;
+                if (nodes.get(j).equals(dest)) destIndex = j;
+            }
+            
+            if ((pathSrc == srcIndex && pathDest == destIndex) ||
+                (pathSrc == destIndex && pathDest == srcIndex)) {
+                edgeIndex = i;
+                break;
+            }
+        }
+        
+        if (edgeIndex == -1) return;
+        
+        // Calculate the progress for this specific edge
+        float totalProgress = (float) animationStep / ANIMATION_STEPS;
+        float edgeProgress = Math.max(0, Math.min(1, (totalProgress - (float) edgeIndex / (highlightedPath.size() - 1)) * (highlightedPath.size() - 1)));
+        
+        if (edgeProgress > 0 && edgeProgress <= 1) {
+            // Calculate the current position along this edge
+            int currentX = (int) (src.x + (dest.x - src.x) * edgeProgress);
+            int currentY = (int) (src.y + (dest.y - src.y) * edgeProgress);
+            
+            // Draw a glowing effect at the current position
+            int glowSize = 25;
+            RadialGradientPaint glow = new RadialGradientPaint(
+                currentX, currentY, glowSize,
+                new float[]{0.0f, 0.7f, 1.0f},
+                new Color[]{
+                    new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), 200),
+                    new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), 100),
+                    new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), 0)
+                }
+            );
+            
+            g2d.setPaint(glow);
+            g2d.fillOval(currentX - glowSize, currentY - glowSize, glowSize * 2, glowSize * 2);
+            
+            // Draw a moving dot with pulsing effect
+            int dotSize = 8 + (int)(4 * Math.sin(animationStep * 0.5));
+            g2d.setColor(ANIMATION_COLOR);
+            g2d.fillOval(currentX - dotSize/2, currentY - dotSize/2, dotSize, dotSize);
+            
+            // Draw a white border around the dot
+            g2d.setColor(Color.WHITE);
+            g2d.setStroke(new BasicStroke(2.0f));
+            g2d.drawOval(currentX - dotSize/2, currentY - dotSize/2, dotSize, dotSize);
+            
+            // Draw a trail effect
+            for (int i = 1; i <= 3; i++) {
+                float trailProgress = edgeProgress - (i * 0.1f);
+                if (trailProgress > 0) {
+                    int trailX = (int) (src.x + (dest.x - src.x) * trailProgress);
+                    int trailY = (int) (src.y + (dest.y - src.y) * trailProgress);
+                    int trailSize = dotSize - i * 2;
+                    if (trailSize > 0) {
+                        g2d.setColor(new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), 100 - i * 30));
+                        g2d.fillOval(trailX - trailSize/2, trailY - trailSize/2, trailSize, trailSize);
+                    }
+                }
+            }
+        }
+    }
+
+    private void drawAnimatedNode(Graphics2D g2d, Point p, int nodeIndex) {
+        // Find the position of this node in the path
+        int pathIndex = highlightedPath.indexOf(nodeIndex);
+        if (pathIndex == -1) return;
+        
+        // Calculate animation progress for this specific node
+        float nodeProgress = (float) pathIndex / (highlightedPath.size() - 1);
+        float currentProgress = (float) animationStep / ANIMATION_STEPS;
+        
+        // Only animate if we've reached this node in the sequence
+        if (currentProgress >= nodeProgress) {
+            // Calculate the intensity of the glow effect
+            float intensity = Math.min(1.0f, (currentProgress - nodeProgress) * 2.0f);
+            
+            // Draw pulsing glow effect with multiple layers
+            int maxGlowSize = 50;
+            int glowSize = (int) (maxGlowSize * intensity);
+            
+            if (glowSize > 0) {
+                // Outer glow
+                RadialGradientPaint outerGlow = new RadialGradientPaint(
+                    p.x, p.y, glowSize,
+                    new float[]{0.0f, 0.6f, 1.0f},
+                    new Color[]{
+                        new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), (int)(80 * intensity)),
+                        new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), (int)(40 * intensity)),
+                        new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), 0)
+                    }
+                );
+                
+                g2d.setPaint(outerGlow);
+                g2d.fillOval(p.x - glowSize, p.y - glowSize, glowSize * 2, glowSize * 2);
+                
+                // Inner glow with pulsing effect
+                int pulseSize = (int) (30 + 10 * Math.sin(animationStep * 0.3 + pathIndex));
+                RadialGradientPaint innerGlow = new RadialGradientPaint(
+                    p.x, p.y, pulseSize,
+                    new float[]{0.0f, 0.8f, 1.0f},
+                    new Color[]{
+                        new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), (int)(150 * intensity)),
+                        new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), (int)(80 * intensity)),
+                        new Color(ANIMATION_COLOR.getRed(), ANIMATION_COLOR.getGreen(), ANIMATION_COLOR.getBlue(), 0)
+                    }
+                );
+                
+                g2d.setPaint(innerGlow);
+                g2d.fillOval(p.x - pulseSize, p.y - pulseSize, pulseSize * 2, pulseSize * 2);
+            }
+        }
     }
 
     private void handleMouseClick(MouseEvent e) {
@@ -539,10 +681,16 @@ public class GraphGUI extends JFrame {
                 } else {
                     highlightedPath = resultObj.path;
                     isPathHighlighted = true;
-                    repaint();
                     
-                    // Show result dialog
-                    showPathResult(resultObj);
+                    // Start the animation
+                    startPathAnimation();
+                    
+                    // Show result dialog after animation
+                    Timer resultTimer = new Timer(ANIMATION_DELAY * ANIMATION_STEPS + 1000, e -> {
+                        showPathResult(resultObj);
+                    });
+                    resultTimer.setRepeats(false);
+                    resultTimer.start();
                 }
                 
             } catch (NumberFormatException ex) {
@@ -567,7 +715,40 @@ public class GraphGUI extends JFrame {
                                     JOptionPane.INFORMATION_MESSAGE);
     }
 
+    private void startPathAnimation() {
+        // Stop any existing animation
+        if (animationTimer != null) {
+            animationTimer.stop();
+        }
+        
+        // Reset animation state
+        animationStep = 0;
+        isAnimating = true;
+        
+        // Create and start the animation timer
+        animationTimer = new Timer(ANIMATION_DELAY, e -> {
+            animationStep++;
+            
+            if (animationStep >= ANIMATION_STEPS) {
+                // Animation complete
+                isAnimating = false;
+                animationTimer.stop();
+            }
+            
+            repaint();
+        });
+        
+        animationTimer.start();
+    }
+
     private void clearPath() {
+        // Stop any ongoing animation
+        if (animationTimer != null) {
+            animationTimer.stop();
+        }
+        isAnimating = false;
+        animationStep = 0;
+        
         isPathHighlighted = false;
         highlightedPath.clear();
         repaint();
@@ -579,6 +760,13 @@ public class GraphGUI extends JFrame {
             "Confirm Clear", JOptionPane.YES_NO_OPTION);
         
         if (confirm == JOptionPane.YES_OPTION) {
+            // Stop any ongoing animation
+            if (animationTimer != null) {
+                animationTimer.stop();
+            }
+            isAnimating = false;
+            animationStep = 0;
+            
             // Track action
             undoStack.push(new ClearAllAction(nodes, edges, graph, nodeCount));
             redoStack.clear();
